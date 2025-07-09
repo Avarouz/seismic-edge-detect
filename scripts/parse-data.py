@@ -2,7 +2,10 @@ import os
 import h5py
 import glob
 
-LOCAL_DIR = "../quakeflow_das/data/ridgecrest_north"
+from utils.io import extract_data
+from utils.plot import plot_seismogram
+
+LOCAL_DIR = "./ridgecrest_north/"
 NUM_FILES = 2
 
 print("Looking for local H5 files")
@@ -32,7 +35,7 @@ files_to_process = h5_files[:NUM_FILES]
 print(f"\n Processing {len(files_to_process)} files")
 
 
-# Inspection of H5 files
+# inspection of H5 files
 for i, file_path in enumerate(files_to_process):
     print(f"Inspecting files {i+1}: {os.path.basename(file_path)}")
 
