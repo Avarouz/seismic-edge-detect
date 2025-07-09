@@ -5,8 +5,10 @@ from pathlib import Path
 from scipy.signal import butter, filtfilt
 
 
-DATA_DIR = Path("/home/joe/research/seismic-edge-detect/ridgecrest_north")
-SAVE_PLOT = False
+DATA_DIR = Path("/home/joe/research/seismic-edge-detect/ridgecrest_north") # dawg i need to change this
+TEED_DATA_DIR = Path("TEED/data")
+TEED_DATA_DIR.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+SAVE_PLOT = True
 
 def normalize_rows(data, clip_val=1.0):
     normalized = data / (np.max(np.abs(data), axis=1, keepdims=True) + 1e-6)
@@ -27,6 +29,8 @@ def plot_arrival_image(data, dt_s, event_time_index, event_id):
                    extent=[time[0], time[-1], 0, num_channels],
                    vmin=-0.3, vmax=0.3, origin='upper')
     
+    
+    
     ax.axvline(event_time, color='yellow', linestyle='--', linewidth=1.5, label='Event Time')
 
     ax.set_title(f"Seismogram - {event_id}")
@@ -36,8 +40,18 @@ def plot_arrival_image(data, dt_s, event_time_index, event_id):
     plt.colorbar(im, ax=ax, label="Normalized Strain Rate")
     plt.legend()
     plt.tight_layout()
-    plt.show()
 
+    if SAVE_PLOT:
+        save_path = TEED_DATA_DIR / f"seismogram_{event_id}.png"
+
+        if save_path.exists():
+            print(f"File {save_path} already exists. Skipping save.")
+        else:
+            plt.savefig(save_path)
+            print(f"Saved plot to {save_path}")
+
+    plt.show()
+    plt.close(fig)
 
 def process_h5_file(filepath):
 
@@ -56,6 +70,7 @@ def process_h5_file(filepath):
         print(f"{filepath.name} shape: {raw.shape}")
 
 
-all_h5_files = sorted(DATA_DIR.glob("*.h5"))[:1]  # adjust as needed
+
+all_h5_files = sorted(DATA_DIR.glob("*.h5"))[:10]  # adjust as needed
 for file in all_h5_files:
     process_h5_file(file)
