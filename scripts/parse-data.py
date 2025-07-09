@@ -2,7 +2,7 @@ import os
 import h5py
 import glob
 
-LOCAL_DIR = "quakeflow_das/data/ridgecrest_north"
+LOCAL_DIR = "../quakeflow_das/data/ridgecrest_north"
 NUM_FILES = 2
 
 print("Looking for local H5 files")
