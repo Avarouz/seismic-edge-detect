@@ -50,7 +50,7 @@ def process_h5_file(filepath):
         fs = 1 / dt_s # sample f (Hz)
         filtered = bandpass_filter(raw, fs)
 
-        processed = normalize_rows(raw, clip_val=1.0)
+        processed = normalize_rows(filtered, clip_val=1.0)
         plot_arrival_image(processed, dt_s, event_time_index, event_id)
 
         print(f"{filepath.name} shape: {raw.shape}")
