@@ -2,9 +2,6 @@ import os
 import h5py
 import glob
 
-from utils.io import extract_data
-from utils.plot import plot_seismogram
-
 LOCAL_DIR = "./ridgecrest_north/"
 NUM_FILES = 2
 
@@ -43,8 +40,7 @@ for i, file_path in enumerate(files_to_process):
         with h5py.File(file_path, "r") as f:
             print(f"Root level keys: {list(f.keys())}")
 
-            # Check root attributes first
-            if f.attrs:
+            if f.attrs:  # Check root attributes first
                 print(f"Root attributes: {dict(f.attrs)}")
 
             def explore(name, obj):
@@ -56,7 +52,7 @@ for i, file_path in enumerate(files_to_process):
                     print(f"{indent} dType: {obj.dtype}")
                     print(f"{indent} Size: {obj.size} elements")
 
-                    # add sample attempt later
+                    # add sample attempt later...
 
                     if obj.attrs:
                         print(f"{indent} Attributes: {dict(obj.attrs)}")
