@@ -3,9 +3,4 @@ ridgecrest_north/
 
 # Environments
 venv/
-
 requirements.txt
-
-# images
-results/
-TEED/

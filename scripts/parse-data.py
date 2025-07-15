@@ -1,6 +1,39 @@
 import os
+import torch
+import numpy as np
 import h5py
-import glob
+from glob import glob
+import matplotlib.pyplot as plt
+import pandas as pd
+
+if not os.path.exists("data"):
+    os.mkdir("data")
+
+event_id = "ci38595978"
+if not os.path.exists(f'data/{event_id}.h5'):
+    os.system(f"wget https://huggingface.co/datasets/AI4EPS/quakeflow_das/resolve/main/data/ridgecrest_north/{event_id}.h5 -P data > log.txt 2>&1")
+
+
+
+normalize = lambda x: (x - np.mean(x, axis=-1, keepdims=True)) / np.std(x, axis=-1, keepdims=True)
+# h5_files = glob("data/*.h5")
+# for file in h5_files:
+file = f"data/{event_id}.h5"
+with h5py.File(file, "r") as fp:
+    ds = fp["data"]
+    data = ds[...]
+    dt = ds.attrs["dt_s"]
+    dx = ds.attrs["dx_m"]
+    nx, nt = data.shape
+    x = np.arange(nx) * dx
+    t = np.arange(nt) * dt
+        
+plt.figure()
+plt.imshow(normalize(data).T, cmap="seismic", vmin=-1, vmax=1, aspect="auto", extent=[x[0], x[-1], t[-1], t[0]], interpolation="none")
+plt.xlabel("Distance (m)")
+plt.ylabel("Time (s)")
+
+breakpoint
 
 LOCAL_DIR = "./ridgecrest_north/"
 NUM_FILES = 2
