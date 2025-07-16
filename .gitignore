@@ -1,11 +1,10 @@
 # data folders
-ridgecrest_north/
+data/
 
-# Environments
+# environments + package installments
 venv/
-
 requirements.txt
+log.txt
 
-# images
-results/
+# external repos
 TEED/
