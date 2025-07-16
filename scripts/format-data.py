@@ -70,6 +70,7 @@ def process_h5_file(filepath):
 
 
 
-all_h5_files = sorted(DATA_DIR.glob("*.h5"))[:3]  # adjust as needed
+all_h5_files = sorted(DATA_DIR.glob("*.h5"))[-1:]  # adjust as needed
+print(all_h5_files)
 for file in all_h5_files:
     process_h5_file(file)
