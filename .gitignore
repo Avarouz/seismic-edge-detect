@@ -6,5 +6,3 @@ venv/
 requirements.txt
 log.txt
 
-# external repos
-TEED/
