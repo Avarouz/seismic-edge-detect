@@ -224,7 +224,7 @@ def parse_args(is_testing=True):
     # TRAIN_DATA = DATASET_NAMES[0] # BIPED=0, BRIND=6, MDBD=10, BIPBRI=13
     # train_inf = dataset_info(TRAIN_DATA, is_linux=IS_LINUX)
 
-    TRAIN_DATA = 'BIPED'  # always use BIPED as training dataset context
+    TRAIN_DATA = 'UDED' # always use BIPED as training dataset context
     train_inf = dataset_info(TRAIN_DATA, is_linux=IS_LINUX)
 
     train_dir = train_inf['data_dir']
@@ -524,6 +524,6 @@ def main(args, train_inf):
 
 if __name__ == '__main__':
     # os.system(" ".join(command))
-    is_testing =True # True to use TEED for testing
-    args, train_info = parse_args(is_testing=is_testing)
+    is_testing =False # True to use TEED for testing
+    args, train_info = parse_args(is_testing)
     main(args, train_info)
