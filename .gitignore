@@ -1,5 +1,6 @@
 # data folders
-data/
+TEED/data/
+TEED/result/
 
 # environments + package installments
 .venv/
@@ -11,6 +12,5 @@ TEED/BIPED
 
 TEED/checkpoints
 TEED/result
-data/
 
 TEED/checkpoints/
