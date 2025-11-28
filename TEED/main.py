@@ -12,7 +12,7 @@ os.environ['CUDA_LAUNCH_BLOCKING']="0"
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from thop import profile
+import datetime
 
 from dataset import DATASET_NAMES, BipedDataset, TestDataset, dataset_info
 from loss2 import *
@@ -127,7 +127,7 @@ def validate_one_epoch(epoch, dataloader, model, device, output_dir, arg=None,te
 def test(checkpoint_path, dataloader, model, device, output_dir, args,resize_input=False):
     if not os.path.isfile(checkpoint_path):
         raise FileNotFoundError(
-            f"Checkpoint filte note found: {checkpoint_path}")
+            f"Checkpoint filte not found: {checkpoint_path}")
     print(f"Restoring weights from: {checkpoint_path}")
     model.load_state_dict(torch.load(checkpoint_path,
                                      map_location=device))
@@ -141,13 +141,12 @@ def test(checkpoint_path, dataloader, model, device, output_dir, args,resize_inp
         total_duration = []
         for batch_id, sample_batched in enumerate(dataloader):
             images = sample_batched['images'].to(device)
+
             # if not args.test_data == "CLASSIC":
             labels = sample_batched['labels'].to(device)
             file_names = sample_batched['file_names']
             image_shape = sample_batched['image_shape']
 
-
-            print(f"{file_names}: {images.shape}")
             end = time.perf_counter()
             if device.type == 'cuda':
                 torch.cuda.synchronize()
@@ -186,7 +185,6 @@ def testPich(checkpoint_path, dataloader, model, device, output_dir, args, resiz
                 labels = sample_batched['labels'].to(device)
             file_names = sample_batched['file_names']
             image_shape = sample_batched['image_shape']
-            print(f"input tensor shape: {images.shape}")
             start_time = time.time()
             images2 = images[:, [1, 0, 2], :, :]  #GBR
             # images2 = images[:, [2, 1, 0], :, :] # RGB
@@ -206,28 +204,43 @@ def testPich(checkpoint_path, dataloader, model, device, output_dir, args, resiz
     print("Average time per image: %f.4" % total_duration.mean(), "seconds")
     print("Time spend in the Dataset: %f.4" % total_duration.sum(), "seconds")
 
-def parse_args(is_testing=True):
+def parse_args(is_testing=False):
     """Parse command line arguments."""
-    
     parser = argparse.ArgumentParser(description='TEED model')
+    
+
+    parser.add_argument('--is_training',
+        action='store_true',
+        default=False,
+        help='Run in training mode.')
+    
+    parser.add_argument('--is_testing',
+        action='store_true',
+        default=False,
+        help='Run in testing mode.')
+    
     parser.add_argument('--choose_test_data',
-                        type=int,
-                        default=-1,     # UDED=15
-                        help='Choose a dataset for testing: 0 - 15')
+                       type=int,
+                       default=0,  # or another valid index
+                       help='Choose a dataset for testing: 0 - 15')
+        
+                        
+    # parser.add_argument('--train_list', type=str, required=True, 
+    #                 help='Path to training list file')
 
     # ----------- test -------0--
-    TEST_DATA = DATASET_NAMES[parser.parse_args().choose_test_data] # max 8
+    temp_args, _ = parser.parse_known_args()
+    TEST_DATA = DATASET_NAMES[temp_args.choose_test_data]
     test_inf = dataset_info(TEST_DATA, is_linux=IS_LINUX)
+
+    TRAIN_DATA = DATASET_NAMES[0]
+    train_inf = dataset_info(TRAIN_DATA, is_linux=IS_LINUX)
+    train_dir = train_inf['data_dir']
 
     # Training settings
     # BIPED-B2=1, BIPDE-B3=2, just for evaluation, using LDC trained with 2 or 3 bloacks
-    # TRAIN_DATA = DATASET_NAMES[0] # BIPED=0, BRIND=6, MDBD=10, BIPBRI=13
+    # DEFAULT TO UDED FOR NOW -8/25
     # train_inf = dataset_info(TRAIN_DATA, is_linux=IS_LINUX)
-
-    TRAIN_DATA = 'BIPED'  # always use BIPED as training dataset context
-    train_inf = dataset_info(TRAIN_DATA, is_linux=IS_LINUX)
-
-    train_dir = train_inf['data_dir']
 
     # Data parameters
     parser.add_argument('--input_dir',
@@ -260,9 +273,6 @@ def parse_args(is_testing=True):
                         type=str,
                         default=train_inf['train_list'],
                         help='Dataset sample indices list.')
-    parser.add_argument('--is_testing',type=bool,
-                        default=is_testing,
-                        help='Script in testing mode.')
     parser.add_argument('--predict_all',
                         type=bool,
                         default=False,
@@ -355,6 +365,15 @@ def parse_args(is_testing=True):
                         type=float)  # [103.939,116.779,123.68,137.86] [104.00699, 116.66877, 122.67892]
 
     args = parser.parse_args()
+
+    # set mode based on flags
+    if args.is_training:
+        args.is_testing = False
+    elif args.is_testing:
+        args.is_testing = True
+    else:
+        args.is_testing= False
+
     return args, train_inf
 
 
@@ -398,7 +417,12 @@ def main(args, train_inf):
     model = TED().to(device)
     # model = nn.DataParallel(model)
     ini_epoch =0
+
     if not args.is_testing:
+        print("\n" + "="*60)
+        print("RUNNING IN TRAINING MODE")
+        print("="*60 + "\n")
+
         if args.resume:
             checkpoint_path2= os.path.join(args.output_dir, 'BIPED-54-B4',args.checkpoint_data)
             ini_epoch=8
@@ -416,26 +440,48 @@ def main(args, train_inf):
                                       batch_size=args.batch_size,
                                       shuffle=True,
                                   num_workers=args.workers)
+        print(f"Training dataset loaded: {len(dataset_train)} samples")
+
     # Test dataset loading...
+
+    print("DEBUG: input_val_dir =", args.input_val_dir)
+    print("DEBUG: test_list =", args.test_list)
+
     dataset_val = TestDataset(args.input_val_dir,
                               test_data=args.test_data,
                               img_width=args.test_img_width,
                               img_height=args.test_img_height,
                               test_list=args.test_list, arg=args
                               )
+
     dataloader_val = DataLoader(dataset_val,
                                 batch_size=1,
                                 shuffle=False,
                                 num_workers=args.workers)
     # Testing
     if_resize_img = False if args.test_data in ['BIPED', 'CID', 'MDBD'] else True
+
     if args.is_testing:
+        print("\n" + "="*60)
+        print("RUNNING IN TESTING MODE")
+        print("="*60 + "\n")
 
-        output_dir = os.path.join(args.res_dir, args.train_data+"2"+ args.test_data)
-        print(f"output_dir: {output_dir}")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        test(checkpoint_path, dataloader_val, model, device,
-             output_dir, args,if_resize_img)
+        output_dir = os.path.join(
+            args.res_dir,
+            f"{args.train_data}2{args.test_data}_{timestamp}"
+        )
+
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"output_dir: {output_dir}") # sanity test
+
+        test(checkpoint_path, dataloader_val, model, device, output_dir, args, if_resize_img)
+        log_path = os.path.join(args.res_dir, "test_log.txt")
+        with open(log_path, "a") as f:
+            f.write(f"[{timestamp}] Tested {args.train_data}->{args.test_data}, checkpoint: {args.checkpoint_data}\n")
+            f.write(f"Results saved to: {output_dir}\n\n")
+        
 
         # Count parameters:
         num_param = count_parameters(model)
@@ -524,6 +570,5 @@ def main(args, train_inf):
 
 if __name__ == '__main__':
     # os.system(" ".join(command))
-    is_testing =True # True to use TEED for testing
-    args, train_info = parse_args(is_testing=is_testing)
+    args, train_info = parse_args()
     main(args, train_info)

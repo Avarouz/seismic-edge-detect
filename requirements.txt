@@ -3,6 +3,7 @@ scipy
 matplotlib
 pandas
 obspy
+opencv-python
 
 h5py
 torch
@@ -12,3 +13,11 @@ fsspec
 
 python-dotenv
 requests
+
+kornia
+scikit-image
+scikit-learn
+argparse
+datetime
+
+tensorboard

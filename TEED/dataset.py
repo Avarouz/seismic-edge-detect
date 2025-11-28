@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 import json
 
 import h5py
+from scipy.signal import butter, sosfiltfilt
 
 DATASET_NAMES = [
     'SEISMIC',
@@ -33,24 +34,60 @@ DATASET_NAMES = [
 # [108, 109.451,112.230,137.86]
 BIPED_mean = [103.939,116.779,123.68,137.86]
 
+# ============ SEISMIC UTILITIES ============
+def bandpass(data, fs, lowcut=2, highcut=10, order=4):
+    """Apply bandpass filter to seismic data."""
+    sos = butter(order, [lowcut, highcut], btype="band", fs=fs, output="sos")
+    return sosfiltfilt(sos, data, axis=1)
+
+def load_seismic_h5(h5_path):
+    """Load and preprocess seismic H5 file."""
+    with h5py.File(h5_path, "r") as fp:
+        ds = fp["data"]
+        data = ds[...]  # (channels, time)
+        dt = float(ds.attrs.get("dt_s", 0.005))
+        dx = float(ds.attrs.get("dx_m", 1.0))
+    
+    return data, dt, dx
+
+def preprocess_seismic(data, dt):
+    clip_val = np.percentile(np.abs(data), 95)
+    data_clip = np.clip(data, -clip_val, clip_val)
+
+    fs = 1.0 / dt
+    data_filt = bandpass(data_clip, fs, lowcut=2, highcut=10)
+
+    # Normalize to [0,1]
+    img = (data_filt - data_filt.min()) / (data_filt.max() - data_filt.min() + 1e-8)
+
+    # ---- FIX: match TEED normalization ----
+    # Expand to 4 channels
+    img = np.repeat(img[..., None], 4, axis=2)
+
+    # Convert to uint8 0-255
+    img = (img * 255).astype(np.uint8)
+
+    return img
+
+
 def dataset_info(dataset_name, is_linux=True):
     if is_linux:
-
         config = {
             'SEISMIC': {
                 'img_height': 1024,
                 'img_width': 1024,
-                'test_list': 'seismic_list.txt', # add this !!
-                'data_dir': '/home/joe/research/seismic-edge-detect/data',
+                'test_list': 'seismic_list.txt',
+                'train_list': 'seismic_train_list.txt',
+                'data_dir': '/root/workspace/datasets/SEISMIC',
                 'yita': 0.5,
-                'mean': BIPED_mean # not sure what else to put here
+                'mean': [104.007, 116.669, 122.679, 137.86]
             },
             'UDED': {
                 'img_height': 512,  # 321
                 'img_width': 512,  # 481
-                'train_list': None,
-                'test_list': 'test_pair.lst',
-                'data_dir': '/root/workspace/datasets/UDED',  # mean_rgb
+                'train_list': '/home/joe/seismic-edge-detect/TEED/UDED-main/uded_train_pair.lst',
+                'test_list': '/home/joe/seismic-edge-detect/TEED/UDED-main/uded_test_pair.lst',
+                'data_dir': '/home/joe/seismic-edge-detect/TEED/UDED-main/imgs',  # mean_rgb
                 'yita': 0.5,
                 'mean': [104.007, 116.669, 122.679, 137.86]# [104.007, 116.669, 122.679, 137.86]
             }, #[98.939,111.779,117.68,137.86]
@@ -129,23 +166,20 @@ def dataset_info(dataset_name, is_linux=True):
                 'mean': [104.007, 116.669, 122.679, 137.86]
             },
             'BIPED': {
-                'img_height': 720, #720 # 1088
-                'img_width': 1280, # 1280 5 1920
-                'test_list': 'test_pair.lst',
-                'train_list': 'train_pair0.lst', # Base augmentation
-                # 'train_list': 'train_pairB3.lst', # another augmentation
-                # 'train_list': 'train_pairB5.lst', # Last augmentation
-                'data_dir': '/root/workspace/datasets/BIPED',  # mean_rgb
+                'img_height': 512,
+                'img_width': 512,
+                'train_list': '/home/joe/seismic-edge-detect/TEED/BIPED/train_rgb.lst',
+                'test_list': '/home/joe/seismic-edge-detect/TEED/BIPED/test_rgb.lst',
+                'data_dir': '/home/joe/seismic-edge-detect/TEED/BIPED',
                 'yita': 0.5,
-                'mean':BIPED_mean
-            #
+                'mean': [103.939,116.779,123.68,137.86],
             },
             'CLASSIC': {
                 'img_height': 512,#
                 'img_width': 512,# 512
                 'test_list': None,
                 'train_list': None,
-                'data_dir': 'data',  # mean_rgb
+                'data_dir': 'imgs',  # mean_rgb
                 'yita': 0.5,
                 'mean': [104.007, 116.669, 122.679, 137.86]
             },
@@ -189,14 +223,21 @@ def dataset_info(dataset_name, is_linux=True):
         }
     else:
         config = {
-            # --- ADD CONFIG FOR OTHER OS LATER --- (seismic)
-
+            'SEISMIC': {
+                'img_height': 1024,
+                'img_width': 1024,
+                'test_list': 'seismic_list.txt',
+                'train_list': 'seismic_train_list.txt',
+                'data_dir': 'C:/dataset/SEISMIC',
+                'yita': 0.5,
+                'mean': [104.007, 116.669, 122.679, 137.86]
+            },
             'UDED': {
                 'img_height': 512,  # 321
                 'img_width': 512,  # 481
-                'train_list': None,
-                'test_list': 'test_pair.lst',
-                'data_dir': 'C:/dataset/UDED',  # mean_rgb
+                'train_list': '/home/joe/seismic-edge-detect/TEED/uded_train_pair.lst',
+                'test_list': '/home/joe/seismic-edge-detect/TEED/uded_test_pair.lst',
+                'data_dir': '/home/joe/seismic-edge-detect/TEED/UDED-main/imgs',  # mean_rgb
                 'yita': 0.5,
                 'mean':[104.007, 116.669, 122.679, 137.86] # [183.939,196.779,203.68,137.86] # [104.007, 116.669, 122.679, 137.86]
             },
@@ -299,7 +340,7 @@ def dataset_info(dataset_name, is_linux=True):
                         'img_width': 512,
                         'test_list': None,
                         'train_list': None,
-                        'data_dir': 'data',  # mean_rgb
+                        'data_dir': 'imgs',  # mean_rgb
                         'yita': 0.5,
                         'mean': [104.007, 116.669, 122.679, 137.86]},
             'DCD': {'img_height': 240,
@@ -334,42 +375,32 @@ class TestDataset(Dataset):
         self.img_width = img_width
         self.data_index = self._build_index()
 
-    def load_seismic_h5(self, h5_path): # for custom SEISMIC datasets
-        with h5py.File(h5_path, "r") as fp:
-            ds = fp["data"]
-            data = ds[...]
-            dt = ds.attrs.get("dt_s", 1.0)
-            dx = ds.attrs.get("dx_m", 1.0)
-
-        data = self.normalize_seismic(data)
-        print(f"SEISMIC normalization: min={data.min()}, max={data.max()}, mean={data.mean()}, std={data.std()}")
-
-        return data, dt, dx
-
-    def normalize_seismic(self, data): # keep within range for TEED input type
-        data = (data - np.mean(data, axis=-1, keepdims=True)) / np.std(data, axis=-1, keepdims=True)
-        #data /= np.max(np.abs(data))
-        v_max = 3
-        data = np.clip(data, -v_max, v_max) / v_max
-        return np.float32(data)
-
     def _build_index(self):
         sample_indices = []
 
         if self.test_data.upper() == 'SEISMIC':
-            list_path = os.path.join(self.data_root, self.test_list)
-
+            if self.test_list is None:
+                raise ValueError("test_list not provided for SEISMIC dataset")
+            
+            list_path = self.test_list if self.test_list.startswith('/') else os.path.join(self.data_root, self.test_list)
+            
             with open(list_path, "r") as f:
-                h5_files = [line.strip() for line in f]
-
-            sample_indices = [os.path.join(self.data_root, f) for f in h5_files]
+                h5_files = [line.strip() for line in f if line.strip()]
+            
+            # Convert relative paths to absolute paths
+            sample_indices = [h5_file if h5_file.startswith('/') else os.path.join(self.data_root, h5_file) for h5_file in h5_files]
             return sample_indices
 
                
         if self.test_data == "CLASSIC":
             # for single image testing
-            images_path = os.listdir(self.data_root)
-            labels_path = None
+
+            if self.test_list is None:
+                images_path = self.data_root
+            else:
+
+                images_path = os.path.join(self.data_root, self.test_list)
+            labels_path = None  
             sample_indices = [images_path, labels_path]
         else:
             # image and label paths are located in a list file
@@ -378,18 +409,36 @@ class TestDataset(Dataset):
                 raise ValueError(
                     f"Test list not provided for dataset: {self.test_data}")
 
-            list_name = os.path.join(self.data_root, self.test_list)
             if self.test_data.upper() in ['BIPED', 'BRIND','UDED','ICEDA']:
 
+                # Use absolute path if test_list starts with '/', otherwise join with data_root
+                if self.test_list and self.test_list.startswith('/'):
+                    list_name = self.test_list
+                else:
+                    list_name = os.path.join(self.data_root, self.test_list)
+
+                print(f"Dataset: {self.test_data}")
+
                 with open(list_name) as f:
-                    files = json.load(f)
-                for pair in files:
+                    files = f.readlines()
+                files = [line.strip() for line in files]
+                pairs = [line.split() for line in files]
+
+                for pair in pairs:
+                    if len(pair) < 2:
+                        raise ValueError(f"Bad line in {list_name}: {pair}")
+                
                     tmp_img = pair[0]
                     tmp_gt = pair[1]
                     sample_indices.append(
                         (os.path.join(self.data_root, tmp_img),
-                         os.path.join(self.data_root, tmp_gt),))
+                            os.path.join(self.data_root, tmp_gt),))
             else:
+                if self.test_list and self.test_list.startswith('/'):
+                    list_name = self.test_list
+                else:
+                    list_name = os.path.join(self.data_root, self.test_list)
+
                 with open(list_name, 'r') as f:
                     files = f.readlines()
                 files = [line.strip() for line in files]
@@ -404,74 +453,83 @@ class TestDataset(Dataset):
         return sample_indices
 
     def __len__(self):
-        return len(self.data_index[0]) if self.test_data.upper() == 'CLASSIC' else len(self.data_index)
-
+            if self.test_data.upper() == 'SEISMIC':
+                return len(self.data_index)
+            elif self.test_data == 'CLASSIC':
+                return len(self.data_index[0]) if isinstance(self.data_index[0], list) else 1
+            else:
+                return len(self.data_index)
 
     def __getitem__(self, idx):
         if self.test_data.upper() == 'SEISMIC':
-            h5_path = self.data_index[idx]
-            data, dt, dx = self.load_seismic_h5(h5_path)
+            img_path = self.data_index[idx]
+            # Load PNG image instead of H5
+            img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+            if img is None:
+                raise FileNotFoundError(f"Image file not found: {img_path}")
+            
+            # Convert grayscale to 3-channel if needed
+            if len(img.shape) == 2:
+                # img is (H, W), convert to (H, W, 3)
+                img = np.stack([img, img, img], axis=-1)
+            
+            # Now convert to float and subtract mean
+            img = img.astype(np.float32)
+            img -= np.array(self.mean_bgr, dtype=np.float32)
+            
+            # [H, W, C] to [C, H, W]
+            img = img.transpose((2, 0, 1))
+            image = torch.from_numpy(img).float()
+            
+            # Dummy label
+            label = torch.zeros((1, image.shape[1], image.shape[2]))
+            file_name = os.path.basename(img_path)
+            return dict(images=image, labels=label, file_names=file_name, image_shape=image.shape)
+    
 
-            start = 3000
-            data = data[:self.img_height,:] # resize if
-            label = np.ones_like(data)
-
-            data = (data + 1.0) * 127.5  # Rescale from [-1, 1] → [0, 255]
-            data = np.clip(data, 0, 255)
-
-            image = np.stack([data]*3, axis=-1)  # [H, W, 3], change grayscale
-            image = image.astype(np.float32)
-
-            image -= np.array(self.mean_bgr, dtype=np.float32)
-            import matplotlib.pyplot as plt
-
-            plt.figure()
-            plt.imshow(image)
-            plt.savefig("testing.png")
-
-            image = image.transpose(2, 0, 1)  # [3, H, W], make to tensor
-            image = torch.from_numpy(image).float()
-
-
-
-            label = label[np.newaxis, :, :] # [1, H, W]
-
-            file_name = os.path.splitext(os.path.basename(h5_path))[0] + ".png" # sanity
-            img_shape = data.shape
-
-            print("Input min/max:", image.min(), image.max())
-
-            return dict(images=image, labels=label, file_names=file_name, image_shape=img_shape)
-
-        # get data sample
-        # image_path, label_path = self.data_index[idx]
+        # ----------- other datasets
         if self.data_index[1] is None:
             image_path = self.data_index[0][idx] if len(self.data_index[0]) > 1 else self.data_index[0][idx - 1]
         else:
             image_path = self.data_index[idx][0]
-        label_path = None if self.test_data == "CLASSIC" else self.data_index[idx][1]
-        img_name = os.path.basename(image_path)
-        file_name = os.path.splitext(img_name)[0] + ".png"
 
-        # base dir
-        if self.test_data.upper() == 'BIPED':
-            img_dir = os.path.join(self.data_root, 'imgs', 'test')
-            gt_dir = os.path.join(self.data_root, 'edge_maps', 'test')
-        elif self.test_data.upper() == 'CLASSIC':
-            img_dir = self.data_root
-            gt_dir = None
-        else:
-            img_dir = self.data_root
-            gt_dir = self.data_root
+            label_path = None if self.test_data == "CLASSIC" else self.data_index[idx][1]
+            img_name = os.path.basename(image_path)
+            file_name = os.path.splitext(img_name)[0] + ".png"
 
-        # load data
-        # image = cv2.imread(os.path.join(img_dir, image_path), cv2.IMREAD_COLOR)
- 
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found: {image_path}")
+                
+            image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+            label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE) if label_path else None
+            im_shape = image.shape
+            image, label = self.transform(image, label)
+            
+        if image is None:
+            raise ValueError(f"cv2.imread failed to load image: {image_path}")
+
+        if label is None and self.test_data != "CLASSIC":
+            raise ValueError(f"Label file not found: {label_path}")
+
         return dict(images=image, labels=label, file_names=file_name, image_shape=im_shape)
+
 
     def transform(self, img, gt):
         # gt[gt< 51] = 0 # test without gt discrimination
         # up scale test image
+        
+        if isinstance(img, torch.Tensor):
+            img = img.permute(1, 2, 0).cpu().numpy()
+        if isinstance(gt, torch.Tensor):
+            gt = gt.squeeze().cpu().numpy()
+
+        img = cv2.resize(img, (0, 0), fx=1.5, fy=1.5)
+        gt = cv2.resize(gt, (0, 0), fx=1.5, fy=1.5, interpolation=cv2.INTER_NEAREST)
+
+
+        if img is None:
+            raise ValueError(f"Image is None. Probably bad path or unreadable file.")
+
         if self.up_scale:
             # For TEED BIPBRIlight Upscale
             img = cv2.resize(img,(0,0),fx=1.3,fy=1.3)
@@ -516,10 +574,47 @@ class TestDataset(Dataset):
             gt = torch.from_numpy(np.array([gt])).float()
 
         return img, gt
+    
+#============ TRAINING DATASET ============
+class SeismicTrainDataset(Dataset):
+    """Training dataset for seismic H5 files."""
+    
+    def __init__(self, file_list, img_height=1024, img_width=1024, arg=None):
+        self.files = file_list
+        self.img_height = img_height
+        self.img_width = img_width
+        self.mean_bgr = arg.mean_train[:3] if arg and len(arg.mean_train) == 3 else [104.007, 116.669, 122.679]
+    
+    def __len__(self):
+        return len(self.files)
+    
+    def __getitem__(self, idx):
+        h5_path = self.files[idx]
+        
+        # Load seismic data
+        data, dt, dx = load_seismic_h5(h5_path)
+        img = preprocess_seismic(data, dt)
+        img = cv2.resize(img.T, (self.img_width, self.img_height))
+        
+        # Convert grayscale to 3-channel if needed
+        if len(img.shape) == 2:
+            # img is (H, W), convert to (H, W, 3)
+            img = np.stack([img, img, img], axis=-1)
+        
+        # Now img should be (H, W, 3)
+        img = img.astype(np.float32)
+        img -= np.array(self.mean_bgr, dtype=np.float32)
+        
+        # Convert to tensor format [C, H, W]
+        image = img.transpose((2, 0, 1))
+        image = torch.from_numpy(image).float()
+        
+        # Dummy label (zeros)
+        label = torch.zeros((1, self.img_height, self.img_width))
+        
+        return dict(images=image, labels=label, file_names=os.path.basename(h5_path))
+    
 
-# *************************************************
-# ************* training **************************
-# *************************************************
 class BipedDataset(Dataset):
     train_modes = ['train', 'test', ]
     dataset_types = ['rgbr', ]
@@ -556,7 +651,12 @@ class BipedDataset(Dataset):
         data_root = os.path.abspath(self.data_root)
         sample_indices = []
 
-        file_path = os.path.join(data_root, self.arg.train_list)
+
+        # if self.arg.train_list is None:
+        #     raise ValueError("train_list argument is required but not provided")
+
+        file_path = self.arg.train_list
+
         if self.arg.train_data.lower() == 'bsds':
 
             with open(file_path, 'r') as f:
@@ -571,14 +671,30 @@ class BipedDataset(Dataset):
                     (os.path.join(data_root, tmp_img),
                      os.path.join(data_root, tmp_gt),))
         else:
-            with open(file_path) as f:
-                files = json.load(f)
-            for pair in files:
-                tmp_img = pair[0]
-                tmp_gt = pair[1]
-                sample_indices.append(
-                    (os.path.join(data_root, tmp_img),
-                     os.path.join(data_root, tmp_gt),))
+            with open(file_path, 'r') as f:
+                files = f.readlines()
+            files = [line.strip() for line in files]
+
+            pairs = [line.split() for line in files]
+            for pair in pairs:
+                tmp_img, tmp_gt = pair[0], pair[1]
+                # Use absolute paths directly if they start with '/', otherwise join with data_root
+                if tmp_img.startswith('/'):
+                    img_path = tmp_img
+                    gt_path = tmp_gt
+                else:
+                    img_path = os.path.join(data_root, tmp_img)
+                    gt_path = os.path.join(data_root, tmp_gt)
+                sample_indices.append((img_path, gt_path))
+
+            # with open(file_path) as f:
+            #     files = json.load(f)
+            # for pair in files:
+            #     tmp_img = pair[0]
+            #     tmp_gt = pair[1]
+            #     sample_indices.append(
+            #         (os.path.join(data_root, tmp_img),
+            #          os.path.join(data_root, tmp_gt),))
 
         return sample_indices
 
@@ -590,10 +706,33 @@ class BipedDataset(Dataset):
         image_path, label_path = self.data_index[idx]
 
         # load data
+
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+
+        if image is None:
+            raise FileNotFoundError(f"Image not found or cannot be opened: {image_path}")
+        
         label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
-        image, label = self.transform(img=image, gt=label)
-        return dict(images=image, labels=label)
+        if label is None:
+            raise ValueError(f"Label file not found: {label_path}")
+
+        # Resize image and label to consistent dimensions
+        target_height = self.img_height
+        target_width = self.img_width
+        
+        image = cv2.resize(image, (target_width, target_height))
+        label = cv2.resize(label, (target_width, target_height))
+        
+        image = image.astype(np.float32)
+        image -= np.array(self.mean_bgr, dtype=np.float32)
+        image = image.transpose((2, 0, 1))
+        image = torch.from_numpy(image).float()
+
+        label = np.array(label, dtype=np.float32) / 255.
+        label = torch.from_numpy(label).float().unsqueeze(0)  # Add channel dimension
+
+        return dict(images=image, labels=label, file_names=os.path.basename(image_path))
+
 
     def transform(self, img, gt):
         gt = np.array(gt, dtype=np.float32)

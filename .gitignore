@@ -2,7 +2,15 @@
 data/
 
 # environments + package installments
-venv/
+.venv/
 requirements.txt
 log.txt
 
+TEED/UDED-main
+TEED/BIPED
+
+TEED/checkpoints
+TEED/result
+data/
+
+TEED/checkpoints/
