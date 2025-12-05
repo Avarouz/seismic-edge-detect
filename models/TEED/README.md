@@ -25,23 +25,42 @@ predicted edge-maps are crisp and of high quality, see image above.
 
 Then,
 
+
+# EDITS (12/2025)
+
+## Data
+    data/
+    ├── BIPED/
+    │   ├── images/
+    │   ├── edges/
+    │   ├── train_rgb.lst      # image_path label_path (one per line)
+    │   └── test_rgb.lst
+
 ## Testing with TEED
 
 Copy and paste your images into data/ folder, and:
 
-    python main.py --choose_test_data=-1
+    python main.py --is_testing \
+    --train_data BIPED \
+    --choose_test_data 1 \
+    --input_val_dir /path/to/test/data \
+    --test_list test_rgb.lst \
+    --checkpoint_data checkpoints/BIPED/49_model.pth
 
 ## Training with TEED
 
-Set the following lines in main.py:
 
-    25: is_testing =False
-    # training with BIPED
-    223: TRAIN_DATA = DATASET_NAMES[0] 
+In console, run:
 
-then run
-    
-    python main.py
+    python main.py --is_training \
+    --train_data BIPED \
+    --test_data BIPED \
+    --input_dir /path/to/BIPED \
+    --input_val_dir /path/to/BIPED \
+    --train_list train_rgb.lst \
+    --test_list test_rgb.lst \
+    --epochs 50 \
+    --batch_size 8
 
 Check the configurations of the datasets in dataset.py
 
@@ -50,11 +69,7 @@ Check the configurations of the datasets in dataset.py
 
 Here the [link](https://github.com/xavysp/UDED) to access the UDED dataset for edge detection
 
-## Citation
 
-If you like TEED, why not starring the project on GitHub!
-
-[![GitHub stars](https://img.shields.io/github/stars/xavysp/TEED.svg?style=social&label=Star&maxAge=3600)](https://GitHub.com/xavysp/TEED/stargazers/)
 
 Please cite our Dataset if you find helpful in your academic/scientific publication,
 ```
