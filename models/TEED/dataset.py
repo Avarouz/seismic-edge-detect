@@ -423,9 +423,13 @@ class BipedDataset(Dataset):
 
     def _get_mean(self, arg) -> List[float]:
         """Extract BGR mean values."""
-        if arg and hasattr(arg, 'mean_train'):
-            mean = arg.mean_train
-            return mean[:3] if len(mean) > 3 else mean
+        if arg and hasattr(arg, 'mean_test'):
+            mean = arg.mean_test
+            # Handle both single float and list of values
+            if isinstance(mean, (list, tuple)):
+                return list(mean[:3]) if len(mean) > 3 else list(mean)
+            else:
+                return [float(mean), float(mean), float(mean)]
         return DEFAULT_MEAN[:3]
 
     def _build_index(self) -> List[Tuple[str, str]]:
@@ -522,51 +526,55 @@ class BipedDataset(Dataset):
 
 class SeismicTrainDataset(Dataset):
     """Training dataset for seismic H5 files."""
-    
+
     def __init__(self, 
                  file_list: List[str],
+                 root_dir: str = "",
                  img_height: int = 1024,
                  img_width: int = 1024,
                  arg=None):
         
         self.files = file_list
+        self.root_dir = root_dir
         self.img_height = img_height
         self.img_width = img_width
         self.mean_bgr = self._get_mean(arg)
 
-    def _get_mean(self, arg) -> List[float]:
-        """Extract BGR mean values."""
+    def _get_mean(self, arg):
         if arg and hasattr(arg, 'mean_train'):
             mean = arg.mean_train
-            return mean[:3] if len(mean) > 3 else mean
+            if isinstance(mean, (list, tuple)):
+                return list(mean[:3]) if len(mean) > 3 else list(mean)
+            else:
+                return [float(mean)] * 3
         return DEFAULT_MEAN[:3]
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.files)
 
-    def __getitem__(self, idx: int) -> Dict:
-        h5_path = self.files[idx]
-        
+    def __getitem__(self, idx):
+        filename = self.files[idx]
+        h5_path = os.path.join(self.root_dir, filename)
+
         # Load seismic data
         data, dt, dx = load_seismic_h5(h5_path)
+
         img = preprocess_seismic(data, dt)
-        img = cv2.resize(img.T, (self.img_width, self.img_height))
-        
+        img = cv2.resize(img, (self.img_width, self.img_height))
+
         if len(img.shape) == 2:
             img = np.stack([img, img, img], axis=-1)
 
         img = img.astype(np.float32)
         img -= np.array(self.mean_bgr, dtype=np.float32)
-        
-        # convert to tensor [C, H, W]
+
         image = img.transpose((2, 0, 1))
         image = torch.from_numpy(image).float()
-        
-        label = torch.zeros((1, self.img_height, self.img_width)) # Dummy label
+
+        label = torch.zeros((1, self.img_height, self.img_width))
 
         return {
             'images': image,
             'labels': label,
-            'file_names': os.path.basename(h5_path)
+            'file_names': filename
         }
-

@@ -6,7 +6,7 @@ from __future__ import print_function
 import argparse
 import os
 import time, platform
-from time import datetime
+from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -69,13 +69,13 @@ class Config:
         
         print("Training details:\n", training_notes)
 
-        def print_device_info(self):
-            """Print GPU and PyTorch information."""
-            print(f"\nDevice: {self.device}")
-            print(f"Number of GPUs: {torch.cuda.device_count()}")
-            print(f"PyTorch version: {torch.__version__}")
-            print(f"Train image mean: {self.args.mean_train}")
-            print(f"Test image mean: {self.args.mean_test}\n")
+    def print_device_info(self):
+        """Print GPU and PyTorch information."""
+        print(f"\nDevice: {self.device}")
+        print(f"Number of GPUs: {torch.cuda.device_count()}")
+        print(f"PyTorch version: {torch.__version__}")
+        print(f"Train image mean: {self.args.mean_train}")
+        print(f"Test image mean: {self.args.mean_test}\n")
 
 
 def train_one_epoch(epoch, dataloader, model, criterions, optimizer, config):
@@ -219,13 +219,14 @@ def parse_args():
                        help='Run in training mode.')
     parser.add_argument('--is_testing', action='store_true', default=False,
                        help='Run in testing mode.')
-    parser.add_argument('--choose_test_data', type=int, default=0,
-                       help='Index of test dataset (0-15). See dataset.py for options.')
+    
+    parser.add_argument('--choose_test_data', type=int, default=None,
+                       help='Index of test dataset (0-18). Only used if --test_data not specified.')
     
     # Dataset parameters
     parser.add_argument('--train_data', type=str, choices=DATASET_NAMES, default=DATASET_NAMES[0],
                        help='Training dataset name.')
-    parser.add_argument('--test_data', type=str, choices=DATASET_NAMES, default=DATASET_NAMES[0],
+    parser.add_argument('--test_data', type=str, choices=DATASET_NAMES, default=None,
                        help='Testing dataset name.')
     
     # Directory parameters
@@ -305,15 +306,21 @@ def parse_args():
     
     args = parser.parse_args()
     
+    # handle test_data: use explicit --test_data if provided, otherwise use --choose_test_data
+    if args.test_data is None:
+        if args.choose_test_data is not None:
+            args.test_data = DATASET_NAMES[args.choose_test_data]
+        else:
+            args.test_data = args.train_data
+    
     # Override with dataset-specific info if needed
     if not args.is_testing:
         train_inf = dataset_info(args.train_data, is_linux=IS_LINUX)
         args.input_dir = args.input_dir or train_inf['data_dir']
         args.train_list = args.train_list or train_inf['train_list']
     
-    test_data = DATASET_NAMES[args.choose_test_data]
-    test_inf = dataset_info(test_data, is_linux=IS_LINUX)
-    args.test_data = test_data
+    test_inf = dataset_info(args.test_data, is_linux=IS_LINUX)
+
     args.input_val_dir = args.input_val_dir or test_inf['data_dir']
     args.test_list = args.test_list or test_inf['test_list']
     args.test_img_width = args.test_img_width or test_inf['img_width']
@@ -371,6 +378,10 @@ def main(args, train_inf):
     print("\n" + "="*60)
     print("RUNNING IN TRAINING MODE")
     print("="*60 + "\n")
+    
+    print(f"DEBUG: train_data={args.train_data}, test_data={args.test_data}")
+    print(f"DEBUG: input_val_dir={args.input_val_dir}, test_list={args.test_list}")
+    
     
     # Load datasets
     dataset_train = BipedDataset(args.input_dir, img_width=args.img_width,
