@@ -1,16 +1,10 @@
 # data folders
-TEED/data/
-TEED/result/
+data/
 
 # environments + package installments
 .venv/
 requirements.txt
 log.txt
 
-TEED/UDED-main
-TEED/BIPED
-
-TEED/checkpoints
-TEED/result
-
-TEED/checkpoints/
+models/TEED/checkpoints
+models/TEED/result
