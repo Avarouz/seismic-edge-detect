@@ -49,19 +49,18 @@ def h5_to_img(data, dt, height=512, width=512):
     fs = 1.0 / dt
     data = bandpass(data, fs, lowcut=2, highcut=10)
 
-    clip_val = np.percentile(np.abs(data), 99)
+    clip_val = np.percentile(np.abs(data), 95)
     data = np.clip(data, -clip_val, clip_val)
     
     data = data / (clip_val + 1e-6)
     data = cv2.resize(data, (width, height), interpolation=cv2.INTER_LINEAR)
 
     data = (data + 1) / 2
-    cmap = cm.get_cmap("seismic")
+    cmap = cm.get_cmap("viridis")
     rgba = cmap(data)
     rgb = rgba[..., :3]
     
     return (rgb * 255).astype(np.uint8)
-
 
 class DatasetConfig:
     """ Centralized dataset config for easier management"""
@@ -443,13 +442,13 @@ class SeismicTestDataset(Dataset):
         return len(self.data_index)
     
     def __getitem__(self, idx):
-        h5_path = self.data_index[idx]
+        png_path = self.data_index[idx]
         
-        # Load H5 and convert to DAS image
-        data, dt, dx = load_seismic_h5(h5_path)
-        image = h5_to_img(data, dt, self.img_height, self.img_width)
+        # Load PNG directly instead of H5
+        image = cv2.imread(png_path, cv2.IMREAD_COLOR)
+        if image is None:
+            raise FileNotFoundError(f"PNG not found: {png_path}")
         
-        # Normalize for model
         image = image.astype(np.float32)
         image[:, :, 0] -= self.mean_bgr[0]
         image[:, :, 1] -= self.mean_bgr[1]
@@ -459,7 +458,7 @@ class SeismicTestDataset(Dataset):
         return {
             'images': image,
             'labels': torch.zeros((1, self.img_height, self.img_width)),
-            'file_names': os.path.basename(h5_path),
+            'file_names': os.path.basename(png_path),
             'image_shape': image.shape
         }
 

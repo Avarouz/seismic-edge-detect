@@ -1,1 +1,7 @@
-[20251224_233623] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251224_235018] SEISMIC -> BIPED | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251224_235639] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251224_235830] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251225_000011] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251225_000533] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251225_000625] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251225_000656] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth

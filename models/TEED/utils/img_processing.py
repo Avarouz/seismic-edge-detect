@@ -67,10 +67,12 @@ def save_image_batch_to_disk(preds, output_dir, file_names, img_shape=None, arg=
             pred = pred[0]  # Take first channel
         
         # Convert to uint8
+        
         if pred.max() <= 1.0:
             pred = (pred > 0.5).astype(np.uint8) * 255
         else:
             pred = np.clip(pred, 0, 255).astype(np.uint8)
+        
         
         # Resize if needed - img_shape is (C, H, W)
         if img_shape is not None:
