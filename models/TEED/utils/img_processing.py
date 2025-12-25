@@ -36,78 +36,58 @@ def image_normalization(im, max_val=255.0):
     im = im.astype(np.float32)
     return im / max_val
 
-
 def save_image_batch_to_disk(preds, output_dir, file_names, img_shape=None, arg=None, is_inchannel=False):
     """
     Save a batch of predicted edge maps to disk.
-    
-    Args:
-        preds: Predictions from model (tensor or list of tensors)
-        output_dir: Output directory path
-        file_names: List of file names for the batch
-        img_shape: Original image shapes (for resizing output)
-        arg: Arguments object (optional, for configuration)
-        is_inchannel: Whether predictions are from channel swapping (optional)
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # Handle list of predictions (e.g., from channel swapping)
+    # Handle list of predictions
     if isinstance(preds, list):
-        preds = preds[0]  # Use first prediction
+        preds = preds[0]
     
-    # Convert predictions to numpy if it's a tensor
+    # Convert to numpy
     if isinstance(preds, torch.Tensor):
-        # Apply sigmoid to convert logits to probabilities
         preds = torch.sigmoid(preds)
         preds = preds.cpu().detach().numpy()
     
-    # Process each prediction in the batch
+    # Process each prediction
     for i, pred in enumerate(preds):
-        # Get the file name
+        # Get file name
         if isinstance(file_names, (list, tuple)):
             fname = file_names[i] if i < len(file_names) else f"output_{i}.png"
         else:
             fname = file_names
         
-        # Remove extension and add .png
-        if isinstance(fname, str):
-            base_name = os.path.splitext(fname)[0]
+        base_name = os.path.splitext(fname)[0] if isinstance(fname, str) else f"output_{i}"
+        out_path = os.path.join(output_dir, f"{base_name}.png")
+        
+        # Handle shape: pred is [C, H, W] or [H, W]
+        if len(pred.shape) == 3:
+            pred = pred[0]  # Take first channel
+        
+        # Convert to uint8
+        if pred.max() <= 1.0:
+            pred = (pred > 0.5).astype(np.uint8) * 255
         else:
-            base_name = f"output_{i}"
+            pred = np.clip(pred, 0, 255).astype(np.uint8)
         
-        out_name = f"{base_name}.png"
-        out_path = os.path.join(output_dir, out_name)
-        
-        # Handle prediction shape
-        if isinstance(pred, np.ndarray):
-            # Remove channel dimension if present [C, H, W] -> [H, W]
-            if len(pred.shape) == 3:
-                pred = pred[0]
-            
-            # Convert to uint8 (0-255)
-            if pred.max() <= 1.0:
-                # Apply threshold to binarize edges (values > 0.5 become white)
-                pred = (pred > 0.5).astype(np.uint8) * 255
+        # Resize if needed - img_shape is (C, H, W)
+        if img_shape is not None:
+            shape = img_shape if not isinstance(img_shape[0], (tuple, list)) else img_shape[i]
+            if len(shape) == 3:
+                h, w = int(shape[1]), int(shape[2])
             else:
-                pred = np.clip(pred, 0, 255).astype(np.uint8)
+                h, w = int(shape[0]), int(shape[1])
             
-            # Resize if original shape is provided
-            if img_shape is not None:
-                if isinstance(img_shape, (tuple, list)) and len(img_shape) > 0:
-                    # img_shape is typically (C, H, W) or (H, W)
-                    if isinstance(img_shape[0], (tuple, list)):
-                        shape = img_shape[i] if i < len(img_shape) else img_shape[0]
-                    else:
-                        shape = img_shape
-                    
-                    if len(shape) == 3:
-                        h, w = int(shape[1]), int(shape[2])
-                    else:
-                        h, w = int(shape[0]), int(shape[1])
-                    
-                    pred = cv2.resize(pred, (w, h), interpolation=cv2.INTER_LINEAR)
-            
-            cv2.imwrite(out_path, pred)
+            pred = cv2.resize(pred, (w, h), interpolation=cv2.INTER_LINEAR)
+        
+        # Upscale for display
+        h, w = pred.shape[:2]
+        pred = cv2.resize(pred, (w * EXPORT_SCALE, h * EXPORT_SCALE), interpolation=cv2.INTER_NEAREST)
+
+        # Save
+        cv2.imwrite(out_path, pred)
 
 
 def visualize_result(res_data, arg=None):

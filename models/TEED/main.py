@@ -8,6 +8,7 @@ import os
 import time, platform
 from datetime import datetime
 from pathlib import Path
+from dataset import DATASET_NAMES, BipedDataset, TestDataset, SeismicTrainDataset, dataset_info
 
 import cv2
 import numpy as np
@@ -141,21 +142,20 @@ def validate_one_epoch(epoch, dataloader, model, config, test_resize=False):
     # XXX This is not really validation, but testing
 
     model.eval()
-
+    
     with torch.no_grad():
         for _, sample_batched in enumerate(dataloader):
             images = sample_batched['images'].to(config.device)
             file_names = sample_batched['file_names']
-            image_shape = sample_batched['image_shape']
-
-            preds = model(images,single_test=test_resize)
-
+            
+            preds = model(images, single_test=test_resize)
+            
             output_dir = Path(config.args.output_dir) / config.args.train_data / str(epoch) / \
                         (config.args.test_data + '_res')
             output_dir.mkdir(parents=True, exist_ok=True)
             
             save_image_batch_to_disk(preds[-1], str(output_dir), file_names,
-                                    img_shape=image_shape, arg=config.args)
+                                    img_shape=None, arg=config.args)  # Don't resize
 
 
 def test(checkpoint_path, dataloader, model, config, resize_input=False):
@@ -384,8 +384,20 @@ def main(args, train_inf):
     
     
     # Load datasets
-    dataset_train = BipedDataset(args.input_dir, img_width=args.img_width,
-                                img_height=args.img_height, train_mode='train', arg=args)
+
+    # Load datasets
+    if args.train_data.upper() == 'SEISMIC':
+        # For seismic, read the list file and load H5 files
+        with open(args.train_list, 'r') as f:
+            seismic_files = [line.strip() for line in f if line.strip()]
+        seismic_files = [os.path.join(args.input_dir, f) for f in seismic_files]
+        dataset_train = SeismicTrainDataset(seismic_files, img_height=args.img_height,
+                                           img_width=args.img_width, arg=args)
+    else:
+        dataset_train = BipedDataset(args.input_dir, img_width=args.img_width,
+                                    img_height=args.img_height, train_mode='train', crop_img=crop_img, arg=args)
+        
+        
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size,
                                  shuffle=True, num_workers=args.workers)
     print(f"Training dataset: {len(dataset_train)} samples")

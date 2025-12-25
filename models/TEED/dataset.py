@@ -21,7 +21,7 @@ BIPED_MEAN = [103.939, 116.779, 123.68, 137.86]
 DEFAULT_MEAN = [104.007, 116.669, 122.679, 137.86]
 
 
-# ============ SEISMIC UTILITIES ============
+# ============ SEISMIC UTILS ============
 def bandpass(data, fs, lowcut=2, highcut=10, order=4):
     """Apply bandpass filter to seismic data."""
     sos = butter(order, [lowcut, highcut], btype="band", fs=fs, output="sos")
@@ -43,21 +43,23 @@ def load_seismic_h5(h5_path):
     return data, dt, dx
 
 def preprocess_seismic(data, dt):
-    clip_val = np.percentile(np.abs(data), 95)
-    data_clip = np.clip(data, -clip_val, clip_val)
-
     fs = 1.0 / dt
-    data_filt = bandpass(data_clip, fs, lowcut=2, highcut=10)
 
-    # Normalize to [0,1]
-    img = (data_filt - data_filt.min()) / (data_filt.max() - data_filt.min() + 1e-8)
+    clip_val = np.percentile(np.abs(data), 99)
+    data = np.clip(data, -clip_val, clip_val)
+    data = bandpass(data, fs, lowcut=2, highcut=10)
 
-    # Expand to 4 channels for compatibility
-    img = np.repeat(img[..., None], 4, axis=2)
+    clip_val = np.percentile(np.abs(data), 99)
+    data = np.clip(data, -clip_val, clip_val)
 
-    # Convert to uint8 0-255
+    img = data / clip_val
+    img = (img + 1) / 2  # [-1,1] → [0,1]
+
+    img = np.repeat(img[..., None], 3, axis=2)
+    
     img = (img * 255).astype(np.uint8)
     return img
+
 
 class DatasetConfig:
     """ Centralized dataset config for easier management"""
@@ -232,7 +234,7 @@ class TestDataset(Dataset):
     def get_mean(self, arg) -> List[float]:
         """ Extract BGR mean vals"""
         if arg and hasattr(arg, 'mean_test'):
-            mean - arg.mean_test
+            mean = arg.mean_test
             return mean[:3] if len(mean) > 3 else mean 
         return DEFAULT_MEAN[:3]
 
@@ -249,7 +251,18 @@ class TestDataset(Dataset):
             return [self._resolve_path(f, relative_to_data_root=True) for f in h5_files]
 
         if self.test_data == "CLASSIC":
-            images_path = self.data_root if not self.test_list else self._resolve_path(self.test_list)
+            # For single image or directory testing
+            if self.test_list is None:
+                images_path = self.data_root
+            else:
+                images_path = self._resolve_path(self.test_list)
+            
+            # If it's a directory, get first image
+            if os.path.isdir(images_path):
+                images = sorted([f for f in os.listdir(images_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
+                if images:
+                    images_path = os.path.join(images_path, images[0])
+            
             return [images_path, None]
 
         # For other datasets
@@ -296,24 +309,51 @@ class TestDataset(Dataset):
         else:
             return self._get_standard_item(idx)
         
+    def _get_classic_item(self, idx: int) -> Dict:
+        """Load single image without ground truth (for CLASSIC mode)."""
+        image_path = self.data_index[0]
+        
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image not found: {image_path}")
+        
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError(f"Failed to load image: {image_path}")
+        
+        im_shape = image.shape
+        image, label = self.transform(image, None)
+        
+        file_name = os.path.splitext(os.path.basename(image_path))[0] + ".png"
+        
+        return {
+            'images': image,
+            'labels': label,
+            'file_names': file_name,
+            'image_shape': im_shape
+        }
+            
     def _get_seismic_item(self, idx: int) -> Dict:
-        """Load seismic data item."""
-        img_path = self.data_index[idx]
-        img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise FileNotFoundError(f"Image not found: {img_path}")
+        """Load seismic H5 data item."""
+        h5_path = self.data_index[idx]
         
-        # convert grayscale to 3-channel
-        if len(img.shape) == 2:
-            img = np.stack([img, img, img], axis=-1)
+        # Load and preprocess seismic data
+        data, dt, dx = load_seismic_h5(h5_path)
+        img = preprocess_seismic(data, dt)
         
+        # Resize
+        img = cv2.resize(img, (self.img_width, self.img_height))
+        
+        # Take first 3 channels
+        img = img[:, :, :3]
+        
+        # Normalize
         img = img.astype(np.float32)
         img -= np.array(self.mean_bgr, dtype=np.float32)
         image = img.transpose((2, 0, 1))
         image = torch.from_numpy(image).float()
         
         label = torch.zeros((1, image.shape[1], image.shape[2]))
-        file_name = os.path.basename(img_path)
+        file_name = os.path.basename(h5_path)
         
         return {
             'images': image,
@@ -526,55 +566,38 @@ class BipedDataset(Dataset):
 
 class SeismicTrainDataset(Dataset):
     """Training dataset for seismic H5 files."""
-
+    
     def __init__(self, 
                  file_list: List[str],
-                 root_dir: str = "",
                  img_height: int = 1024,
                  img_width: int = 1024,
                  arg=None):
-        
         self.files = file_list
-        self.root_dir = root_dir
         self.img_height = img_height
         self.img_width = img_width
         self.mean_bgr = self._get_mean(arg)
 
-    def _get_mean(self, arg):
+    def _get_mean(self, arg) -> List[float]:
         if arg and hasattr(arg, 'mean_train'):
             mean = arg.mean_train
             if isinstance(mean, (list, tuple)):
                 return list(mean[:3]) if len(mean) > 3 else list(mean)
             else:
-                return [float(mean)] * 3
+                return [float(mean), float(mean), float(mean)]
         return DEFAULT_MEAN[:3]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.files)
 
-    def __getitem__(self, idx):
-        filename = self.files[idx]
-        h5_path = os.path.join(self.root_dir, filename)
-
-        # Load seismic data
+    def __getitem__(self, idx: int) -> Dict:
+        h5_path = self.files[idx]
         data, dt, dx = load_seismic_h5(h5_path)
-
         img = preprocess_seismic(data, dt)
         img = cv2.resize(img, (self.img_width, self.img_height))
-
-        if len(img.shape) == 2:
-            img = np.stack([img, img, img], axis=-1)
-
+        img = img[:, :, :3]
         img = img.astype(np.float32)
         img -= np.array(self.mean_bgr, dtype=np.float32)
-
         image = img.transpose((2, 0, 1))
         image = torch.from_numpy(image).float()
-
         label = torch.zeros((1, self.img_height, self.img_width))
-
-        return {
-            'images': image,
-            'labels': label,
-            'file_names': filename
-        }
+        return dict(images=image, labels=label, file_names=os.path.basename(h5_path))
