@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 
 import h5py
 from scipy.signal import butter, sosfiltfilt
+import matplotlib.cm as cm
 
 DATASET_NAMES = [
     'SEISMIC', 'BIPED', 'BIPED-B2', 'BIPED-B3', 'BIPED-B5', 'BIPED-B6',
@@ -19,11 +20,12 @@ DATASET_NAMES = [
 
 BIPED_MEAN = [103.939, 116.779, 123.68, 137.86]
 DEFAULT_MEAN = [104.007, 116.669, 122.679, 137.86]
+SEISMIC_MEAN = [104.007, 116.669, 122.679]
 
 
 # ============ SEISMIC UTILS ============
 def bandpass(data, fs, lowcut=2, highcut=10, order=4):
-    """Apply bandpass filter to seismic data."""
+
     sos = butter(order, [lowcut, highcut], btype="band", fs=fs, output="sos")
     return sosfiltfilt(sos, data, axis=1)
 
@@ -34,6 +36,7 @@ def load_seismic_h5(h5_path):
         dt: time sample interval (seconds)
         dx: spatial sample interval (meters)
     """
+
     with h5py.File(h5_path, "r") as fp:
         ds = fp["data"]
         data = ds[...]  # (channels, time)
@@ -42,23 +45,22 @@ def load_seismic_h5(h5_path):
     
     return data, dt, dx
 
-def preprocess_seismic(data, dt):
+def h5_to_img(data, dt, height=512, width=512):
     fs = 1.0 / dt
-
-    clip_val = np.percentile(np.abs(data), 99)
-    data = np.clip(data, -clip_val, clip_val)
     data = bandpass(data, fs, lowcut=2, highcut=10)
 
     clip_val = np.percentile(np.abs(data), 99)
     data = np.clip(data, -clip_val, clip_val)
-
-    img = data / clip_val
-    img = (img + 1) / 2  # [-1,1] → [0,1]
-
-    img = np.repeat(img[..., None], 3, axis=2)
     
-    img = (img * 255).astype(np.uint8)
-    return img
+    data = data / (clip_val + 1e-6)
+    data = cv2.resize(data, (width, height), interpolation=cv2.INTER_LINEAR)
+
+    data = (data + 1) / 2
+    cmap = cm.get_cmap("seismic")
+    rgba = cmap(data)
+    rgb = rgba[..., :3]
+    
+    return (rgb * 255).astype(np.uint8)
 
 
 class DatasetConfig:
@@ -302,9 +304,7 @@ class TestDataset(Dataset):
                 return len(self.data_index)
 
     def __getitem__(self, idx: int) -> Dict:
-        if self.test_data.upper() == 'SEISMIC':
-            return self._get_seismic_item(idx)
-        elif self.test_data == 'CLASSIC':
+        if self.test_data == 'CLASSIC':
             return self._get_classic_item(idx)
         else:
             return self._get_standard_item(idx)
@@ -330,36 +330,6 @@ class TestDataset(Dataset):
             'labels': label,
             'file_names': file_name,
             'image_shape': im_shape
-        }
-            
-    def _get_seismic_item(self, idx: int) -> Dict:
-        """Load seismic H5 data item."""
-        h5_path = self.data_index[idx]
-        
-        # Load and preprocess seismic data
-        data, dt, dx = load_seismic_h5(h5_path)
-        img = preprocess_seismic(data, dt)
-        
-        # Resize
-        img = cv2.resize(img, (self.img_width, self.img_height))
-        
-        # Take first 3 channels
-        img = img[:, :, :3]
-        
-        # Normalize
-        img = img.astype(np.float32)
-        img -= np.array(self.mean_bgr, dtype=np.float32)
-        image = img.transpose((2, 0, 1))
-        image = torch.from_numpy(image).float()
-        
-        label = torch.zeros((1, image.shape[1], image.shape[2]))
-        file_name = os.path.basename(h5_path)
-        
-        return {
-            'images': image,
-            'labels': label,
-            'file_names': file_name,
-            'image_shape': image.shape
         }
         
     def _get_standard_item(self, idx: int) -> Dict:
@@ -435,6 +405,63 @@ class TestDataset(Dataset):
 
         return img, gt
 
+
+# ======= Seismic test dataset ========
+class SeismicTestDataset(Dataset):
+    """Test dataset for seismic H5 files."""
+    
+    def __init__(self, data_root, test_list, img_height, img_width, arg=None):
+        self.data_root = data_root
+        self.img_height = img_height
+        self.img_width = img_width
+        self.mean_bgr = self._get_mean(arg)
+        self.data_index = self._build_index(test_list)
+    
+    def _get_mean(self, arg):
+        """Extract BGR mean values, handling both float and list."""
+        if arg and hasattr(arg, 'mean_test'):
+            mean = arg.mean_test
+            if isinstance(mean, (list, tuple)):
+                return list(mean[:3]) if len(mean) > 3 else list(mean)
+            else:
+                # Single float value - replicate across BGR
+                return [float(mean), float(mean), float(mean)]
+        return SEISMIC_MEAN
+    
+    def _build_index(self, test_list):
+        """Build list of H5 files."""
+        if not test_list:
+            # Auto-discover H5 files
+            return sorted([str(p) for p in Path(self.data_root).glob('*.h5')])
+        else:
+            # Read from file list
+            with open(test_list, 'r') as f:
+                files = [line.strip() for line in f if line.strip()]
+            return [os.path.join(self.data_root, f) if not os.path.isabs(f) else f for f in files]
+    
+    def __len__(self):
+        return len(self.data_index)
+    
+    def __getitem__(self, idx):
+        h5_path = self.data_index[idx]
+        
+        # Load H5 and convert to DAS image
+        data, dt, dx = load_seismic_h5(h5_path)
+        image = h5_to_img(data, dt, self.img_height, self.img_width)
+        
+        # Normalize for model
+        image = image.astype(np.float32)
+        image[:, :, 0] -= self.mean_bgr[0]
+        image[:, :, 1] -= self.mean_bgr[1]
+        image[:, :, 2] -= self.mean_bgr[2]
+        image = torch.from_numpy(image.transpose((2, 0, 1))).float()
+        
+        return {
+            'images': image,
+            'labels': torch.zeros((1, self.img_height, self.img_width)),
+            'file_names': os.path.basename(h5_path),
+            'image_shape': image.shape
+        }
 
 # ============ TRAINING DATASETS ============
 class BipedDataset(Dataset):
@@ -567,37 +594,49 @@ class BipedDataset(Dataset):
 class SeismicTrainDataset(Dataset):
     """Training dataset for seismic H5 files."""
     
-    def __init__(self, 
-                 file_list: List[str],
-                 img_height: int = 1024,
-                 img_width: int = 1024,
-                 arg=None):
-        self.files = file_list
+    def __init__(self, data_root, train_list, img_height, img_width, arg=None):
+        self.data_root = data_root
         self.img_height = img_height
         self.img_width = img_width
         self.mean_bgr = self._get_mean(arg)
-
-    def _get_mean(self, arg) -> List[float]:
+        self.data_index = self._build_index(train_list)
+    
+    def _get_mean(self, arg):
+        """Extract BGR mean values, handling both float and list."""
         if arg and hasattr(arg, 'mean_train'):
             mean = arg.mean_train
             if isinstance(mean, (list, tuple)):
                 return list(mean[:3]) if len(mean) > 3 else list(mean)
             else:
+                # Single float value - replicate across BGR
                 return [float(mean), float(mean), float(mean)]
-        return DEFAULT_MEAN[:3]
-
-    def __len__(self) -> int:
-        return len(self.files)
-
-    def __getitem__(self, idx: int) -> Dict:
-        h5_path = self.files[idx]
+        return SEISMIC_MEAN
+    
+    def _build_index(self, train_list):
+        """Build list of H5 files."""
+        with open(train_list, 'r') as f:
+            files = [line.strip() for line in f if line.strip()]
+        return [os.path.join(self.data_root, f) if not os.path.isabs(f) else f for f in files]
+    
+    def __len__(self):
+        return len(self.data_index)
+    
+    def __getitem__(self, idx):
+        h5_path = self.data_index[idx]
+        
+        # Load H5 and convert to DAS image
         data, dt, dx = load_seismic_h5(h5_path)
-        img = preprocess_seismic(data, dt)
-        img = cv2.resize(img, (self.img_width, self.img_height))
-        img = img[:, :, :3]
-        img = img.astype(np.float32)
-        img -= np.array(self.mean_bgr, dtype=np.float32)
-        image = img.transpose((2, 0, 1))
-        image = torch.from_numpy(image).float()
-        label = torch.zeros((1, self.img_height, self.img_width))
-        return dict(images=image, labels=label, file_names=os.path.basename(h5_path))
+        image = h5_to_img(data, dt, self.img_height, self.img_width)
+        
+        # Normalize for model
+        image = image.astype(np.float32)
+        image[:, :, 0] -= self.mean_bgr[0]
+        image[:, :, 1] -= self.mean_bgr[1]
+        image[:, :, 2] -= self.mean_bgr[2]
+        image = torch.from_numpy(image.transpose((2, 0, 1))).float()
+        
+        return {
+            'images': image,
+            'labels': torch.zeros((1, self.img_height, self.img_width)),
+            'file_names': os.path.basename(h5_path)
+        }

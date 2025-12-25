@@ -8,7 +8,7 @@ import os
 import time, platform
 from datetime import datetime
 from pathlib import Path
-from dataset import DATASET_NAMES, BipedDataset, TestDataset, SeismicTrainDataset, dataset_info
+from dataset import DATASET_NAMES, BipedDataset, TestDataset, SeismicTestDataset, dataset_info
 
 import cv2
 import numpy as np
@@ -351,10 +351,16 @@ def main(args, train_inf):
         print("RUNNING IN TESTING MODE")
         print("="*60 + "\n")
         
-        dataset_val = TestDataset(args.input_val_dir, test_data=args.test_data,
-                                 img_width=args.test_img_width,
-                                 img_height=args.test_img_height,
-                                 test_list=args.test_list, arg=args)
+        if args.test_data.upper() == 'SEISMIC':
+            dataset_val = SeismicTestDataset(args.input_val_dir, test_list=args.test_list,
+                                            img_height=args.test_img_height,
+                                            img_width=args.test_img_width, arg=args)
+        else:
+            dataset_val = TestDataset(args.input_val_dir, test_data=args.test_data,
+                                    img_width=args.test_img_width,
+                                    img_height=args.test_img_height,
+                                    test_list=args.test_list, arg=args)
+            
         dataloader_val = DataLoader(dataset_val, batch_size=1, shuffle=False,
                                    num_workers=args.workers)
         
@@ -387,25 +393,27 @@ def main(args, train_inf):
 
     # Load datasets
     if args.train_data.upper() == 'SEISMIC':
-        # For seismic, read the list file and load H5 files
-        with open(args.train_list, 'r') as f:
-            seismic_files = [line.strip() for line in f if line.strip()]
-        seismic_files = [os.path.join(args.input_dir, f) for f in seismic_files]
-        dataset_train = SeismicTrainDataset(seismic_files, img_height=args.img_height,
-                                           img_width=args.img_width, arg=args)
+        dataset_train = SeismicTrainDataset(args.input_dir, train_list=args.train_list,
+                                        img_height=args.img_height,
+                                        img_width=args.img_width, arg=args)
     else:
         dataset_train = BipedDataset(args.input_dir, img_width=args.img_width,
-                                    img_height=args.img_height, train_mode='train', crop_img=crop_img, arg=args)
-        
-        
+                                    img_height=args.img_height, train_mode='train', crop_img=args.crop_img, arg=args)
+    
+
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size,
                                  shuffle=True, num_workers=args.workers)
     print(f"Training dataset: {len(dataset_train)} samples")
     
-    dataset_val = TestDataset(args.input_val_dir, test_data=args.test_data,
-                             img_width=args.test_img_width,
-                             img_height=args.test_img_height,
-                             test_list=args.test_list, arg=args)
+    if args.test_data.upper() == 'SEISMIC':
+        dataset_val = SeismicTestDataset(args.input_val_dir, test_list=args.test_list,
+                                        img_height=args.test_img_height,
+                                        img_width=args.test_img_width, arg=args)
+    else:
+        dataset_val = TestDataset(args.input_val_dir, test_data=args.test_data,
+                                img_width=args.test_img_width,
+                                img_height=args.test_img_height,
+                                test_list=args.test_list, arg=args)
     dataloader_val = DataLoader(dataset_val, batch_size=1, shuffle=False,
                                num_workers=args.workers)
     
