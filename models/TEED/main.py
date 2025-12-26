@@ -25,7 +25,7 @@ from utils.img_processing import (image_normalization, save_image_batch_to_disk,
                    visualize_result, count_parameters)
 
 
-is_testing = False # set False to train with TEED model
+is_testing = True # set False to train with TEED model
 IS_LINUX = True if platform.system()=="Linux" else False
 
 def train_one_epoch(epoch, dataloader, model, criterions, optimizer, device,
@@ -262,7 +262,7 @@ def parse_args(is_testing=True):
 
     parser.add_argument('--test_list',
         type=str,
-        default='test_rgb.lst',
+        default='seismic_list.txt',
         help='Dataset sample indices list.')
                         
     parser.add_argument('--is_testing',type=bool,
@@ -283,7 +283,7 @@ def parse_args(is_testing=True):
                         help='use previous trained data')  # Just for test
     parser.add_argument('--checkpoint_data',
                         type=str,
-                        default='5/5_model.pth',# 37 for biped 60 MDBD
+                        default='7/7_model.pth',# 37 for biped 60 MDBD
                         help='Checkpoint path.')
     parser.add_argument('--test_img_width',
                         type=int,
@@ -536,6 +536,6 @@ def main(args, train_inf):
 
 if __name__ == '__main__':
     # os.system(" ".join(command))
-    is_testing =False # True to use TEED for testing
+    is_testing = True # True to use TEED for testing
     args, train_info = parse_args(is_testing=is_testing)
     main(args, train_info)

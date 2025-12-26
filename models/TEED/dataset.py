@@ -599,15 +599,27 @@ class BipedDataset(Dataset):
                 sample_indices.append(
                     (os.path.join(data_root, tmp_img),
                      os.path.join(data_root, tmp_gt),))
+                
         else:
-            with open(file_path) as f:
-                files = json.load(f)
-            for pair in files:
-                tmp_img = pair[0]
-                tmp_gt = pair[1]
+            with open(file_path, 'r') as f:
+                lines = [line.strip() for line in f.readlines() if line.strip()]
+
+            for line in lines:
+                parts = line.split()
+
+                # BIPED must have exactly 2 paths per line
+                if len(parts) != 2:
+                    raise ValueError(
+                        f"Invalid BIPED entry in {file_path}: '{line}' "
+                        f"(expected: <img_path> <gt_path>)"
+                    )
+
+                tmp_img, tmp_gt = parts
+
                 sample_indices.append(
                     (os.path.join(data_root, tmp_img),
-                     os.path.join(data_root, tmp_gt),))
+                    os.path.join(data_root, tmp_gt)))
+
 
         return sample_indices
 

@@ -1,11 +1,14 @@
 # data folders
-TEED/data
-TEED/checkpoints
+models/TEED/data
+models/TEED/SEISMIC
+models/TEED/checkpoints
+models/TEED/README.md
+models/TEED/LICENSES
+models/TEED/imgs
+models/TEED/__pycache__
 
 
 # environments + package installments
 .venv/
 requirements.txt
 log.txt
-
-models/
