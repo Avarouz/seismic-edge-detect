@@ -1,8 +1,11 @@
 # data folders
-data/
+TEED/data
+TEED/checkpoints
+
 
 # environments + package installments
-venv/
+.venv/
 requirements.txt
 log.txt
 
+models/

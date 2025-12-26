@@ -41,7 +41,7 @@ def dataset_info(dataset_name, is_linux=True):
                 'img_height': 1024,
                 'img_width': 1024,
                 'test_list': 'seismic_list.txt', # add this !!
-                'data_dir': '/home/joe/research/seismic-edge-detect/data',
+                'data_dir': '/home/joe/seismic-edge-detect/TEED/SEISMIC',
                 'yita': 0.5,
                 'mean': BIPED_mean # not sure what else to put here
             },
@@ -408,12 +408,20 @@ class TestDataset(Dataset):
 
 
     def __getitem__(self, idx):
+
         if self.test_data.upper() == 'SEISMIC':
             h5_path = self.data_index[idx]
             data, dt, dx = self.load_seismic_h5(h5_path)
 
             start = 3000
             data = data[:self.img_height,:] # resize if
+
+            # Pad width to be divisible by 32
+            h, w = data.shape
+            pad_w = (32 - (w % 32)) % 32
+            if pad_w > 0:
+                data = np.pad(data, ((0, 0), (0, pad_w)), mode='constant', constant_values=0)
+                
             label = np.ones_like(data)
 
             data = (data + 1.0) * 127.5  # Rescale from [-1, 1] → [0, 255]

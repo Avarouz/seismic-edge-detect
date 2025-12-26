@@ -164,17 +164,6 @@ def save_image_batch_to_disk(tensor, output_dir, file_names, img_shape=None, arg
             output_file_name_f = os.path.join(output_dir_f, file_name)
             # output_file_name_a = os.path.join(output_dir_a, file_name)
             cv2.imwrite(output_file_name_f, fuse)
-
-             # Save visual side-by-side comparison of edges
-            fig, axs = plt.subplots(1, 1, figsize=(5, 5))
-            axs.imshow(fuse, cmap='gray')
-            axs.set_title(f'Fused Edge: {file_name}')
-            axs.axis('off')
-
-            # Save plot as PNG
-            vis_path = os.path.join(output_dir_f, file_name.replace('.png', '_vis.png'))
-            plt.savefig(vis_path, bbox_inches='tight')
-            plt.close()
             
             # cv2.imwrite(output_file_name_a, average)
             if predict_all:

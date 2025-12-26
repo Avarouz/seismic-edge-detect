@@ -1,6 +1,8 @@
 """
 Hello, welcome on board,
 """
+
+
 from __future__ import print_function
 
 import argparse
@@ -12,7 +14,7 @@ os.environ['CUDA_LAUNCH_BLOCKING']="0"
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from thop import profile
+
 
 from dataset import DATASET_NAMES, BipedDataset, TestDataset, dataset_info
 from loss2 import *
@@ -22,7 +24,8 @@ from ted import TED # TEED architecture
 from utils.img_processing import (image_normalization, save_image_batch_to_disk,
                    visualize_result, count_parameters)
 
-is_testing = False # set False to train with TEED model
+
+is_testing = True # set False to train with TEED model
 IS_LINUX = True if platform.system()=="Linux" else False
 
 def train_one_epoch(epoch, dataloader, model, criterions, optimizer, device,
@@ -428,10 +431,12 @@ def main(args, train_inf):
                                 shuffle=False,
                                 num_workers=args.workers)
     # Testing
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+
     if_resize_img = False if args.test_data in ['BIPED', 'CID', 'MDBD'] else True
     if args.is_testing:
 
-        output_dir = os.path.join(args.res_dir, args.train_data+"2"+ args.test_data)
+        output_dir = os.path.join(args.res_dir, f"{args.train_data}2{args.test_data}_{timestamp}")
         print(f"output_dir: {output_dir}")
 
         test(checkpoint_path, dataloader_val, model, device,
@@ -500,12 +505,12 @@ def main(args, train_inf):
                         args.log_interval_vis,
                         tb_writer=tb_writer,
                         args=args)
-        validate_one_epoch(epoch,
-                           dataloader_val,
-                           model,
-                           device,
-                           img_test_dir,
-                           arg=args, test_resize=if_resize_img)
+        # validate_one_epoch(epoch,
+        #                    dataloader_val,
+        #                    model,
+        #                    device,
+        #                    img_test_dir,
+        #                    arg=args, test_resize=if_resize_img)
 
         # Save model after end of every epoch
         torch.save(model.module.state_dict() if hasattr(model, "module") else model.state_dict(),
