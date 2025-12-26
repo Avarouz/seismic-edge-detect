@@ -5,3 +5,4 @@
 [20251225_000533] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
 [20251225_000625] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
 [20251225_000656] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
+[20251225_195653] SEISMIC -> SEISMIC | Checkpoint: /home/joe/seismic-edge-detect/models/TEED/checkpoints/BIPED/2/2_model.pth
