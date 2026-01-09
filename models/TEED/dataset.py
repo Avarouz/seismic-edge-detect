@@ -422,27 +422,19 @@ class TestDataset(Dataset):
             if pad_w > 0:
                 data = np.pad(data, ((0, 0), (0, pad_w)), mode='constant', constant_values=0)
                 
-            label = np.ones_like(data)
+            # scale from [-1,1] → [0,255]
+            data = (data + 1.0) * 127.5
+            data = np.clip(data, 0, 255).astype(np.float32)
 
-            data = (data + 1.0) * 127.5  # Rescale from [-1, 1] → [0, 255]
-            data = np.clip(data, 0, 255)
-
-            image = np.stack([data]*3, axis=-1)  # [H, W, 3], change grayscale
-            image = image.astype(np.float32)
-
-            image -= np.array(self.mean_bgr, dtype=np.float32)
-            import matplotlib.pyplot as plt
-
-            plt.figure()
-            plt.imshow(image)
-            plt.savefig("testing.png")
-
-            image = image.transpose(2, 0, 1)  # [3, H, W], make to tensor
+            # grayscale --> fake RGB
+            image = np.stack([data, data, data], axis=0)  # [3,H,W]
+            
+            image -= np.array(self.mean_bgr, dtype=np.float32)[:, None, None]
             image = torch.from_numpy(image).float()
 
+            # dummy label (unused)
+            label = torch.zeros((1, data.shape[0], data.shape[1]))
 
-
-            label = label[np.newaxis, :, :] # [1, H, W]
 
             file_name = os.path.splitext(os.path.basename(h5_path))[0] + ".png" # sanity
             img_shape = data.shape

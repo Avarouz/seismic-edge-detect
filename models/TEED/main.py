@@ -160,7 +160,7 @@ def test(checkpoint_path, dataloader, model, device, output_dir, args,resize_inp
             tmp_duration = time.perf_counter() - end
             total_duration.append(tmp_duration)
             save_image_batch_to_disk(preds,
-                                     output_dir, # output_dir
+                                     output_dir,
                                      file_names,
                                      image_shape,
                                      arg=args)
@@ -262,7 +262,7 @@ def parse_args(is_testing=True):
 
     parser.add_argument('--test_list',
         type=str,
-        default='seismic_list.txt',
+        default='test_rgb.lst',
         help='Dataset sample indices list.')
                         
     parser.add_argument('--is_testing',type=bool,
@@ -353,8 +353,8 @@ def parse_args(is_testing=True):
                         type=bool,
                         help='If true crop training images, else resize images to match image width and height.')
     parser.add_argument('--mean_test',
-                        default=test_inf['mean'],
-                        type=float)
+        default=[103.939, 116.779, 123.68],
+        type=float)
     parser.add_argument('--mean_train',
                         default=train_inf['mean'],
                         type=float)  # [103.939,116.779,123.68,137.86] [104.00699, 116.66877, 122.67892]
